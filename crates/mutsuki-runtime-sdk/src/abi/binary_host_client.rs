@@ -6,46 +6,46 @@ use mutsuki_runtime_core::{RuntimeFailure, RuntimeResult};
 use mutsuki_runtime_wire::{
     CancelTaskRequest, CollectReadPlanRequest, CommandBatchRequest, CommandPlanRequest,
     CommitWritePlanRequest, ExportPlanRequest, OpenStreamPlanRequest, SnapshotReadPlanRequest,
-    SubmitTaskBatchRequest, TaskOutcomeRequest, WireRequest, decode_jsonl_response,
-    encode_jsonl_request,
+    SubmitTaskBatchRequest, TaskOutcomeRequest, WireRequest, decode_binary_response,
+    encode_binary_request,
 };
 
 use crate::{ResourcePlanGateway, TaskSubmitter};
 
 use super::error::{abi_failure, wire_failure};
-use super::types::{AbiHostV1, consume_call_result};
+use super::types::{AbiHostV2, consume_call_result};
 
 #[derive(Clone, Copy)]
-pub struct AbiHostClient {
-    host: AbiHostV1,
+pub struct AbiHostClientV2 {
+    host: AbiHostV2,
 }
 
-impl AbiHostClient {
-    pub fn new(host: AbiHostV1) -> Self {
+impl AbiHostClientV2 {
+    pub fn new(host: AbiHostV2) -> Self {
         Self { host }
     }
 
     fn request<R: WireRequest>(&self, value: &R) -> RuntimeResult<R::Response> {
         let callback = self.host.request.ok_or_else(|| {
             abi_failure(
-                "abi.host_callback_missing",
+                "abi.v2.host_callback_missing",
                 "host request callback is unavailable",
             )
         })?;
         let request_id = 1;
         let bytes =
-            encode_jsonl_request(request_id, value, mutsuki_runtime_wire::DEFAULT_WIRE_LIMITS)
+            encode_binary_request(request_id, value, mutsuki_runtime_wire::DEFAULT_WIRE_LIMITS)
                 .map_err(wire_failure)?;
         let response = unsafe { callback(self.host.context, bytes.as_ptr(), bytes.len()) };
         let (ok, response_bytes) =
-            consume_call_result(response, self.host.release, "abi.v1.host_callback_contract")?;
+            consume_call_result(response, self.host.release, "abi.v2.host_callback_contract")?;
         if !ok {
             return Err(abi_failure(
-                "abi.host_callback_failed",
+                "abi.v2.host_callback_failed",
                 String::from_utf8_lossy(&response_bytes),
             ));
         }
-        decode_jsonl_response::<R>(
+        decode_binary_response::<R>(
             &response_bytes,
             request_id,
             mutsuki_runtime_wire::DEFAULT_WIRE_LIMITS,
@@ -54,7 +54,7 @@ impl AbiHostClient {
     }
 }
 
-impl TaskSubmitter for AbiHostClient {
+impl TaskSubmitter for AbiHostClientV2 {
     fn submit_batch(&self, batch: TaskBatch) -> RuntimeResult<Vec<TaskHandle>> {
         self.request(&SubmitTaskBatchRequest { batch })
     }
@@ -72,7 +72,7 @@ impl TaskSubmitter for AbiHostClient {
     }
 }
 
-impl ResourcePlanGateway for AbiHostClient {
+impl ResourcePlanGateway for AbiHostClientV2 {
     fn collect_read_plan(&self, plan: &ReadPlan) -> RuntimeResult<Vec<u8>> {
         self.request(&CollectReadPlanRequest {
             provider_id: None,
