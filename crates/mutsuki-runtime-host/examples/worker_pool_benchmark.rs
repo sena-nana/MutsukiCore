@@ -166,8 +166,11 @@ fn result_json(
         "context_switches": {
             "available": total.is_some(),
             "total": total.map(summary_json),
+            "total_samples": usage_samples(samples, |usage| usage.total),
             "voluntary": voluntary.map(summary_json),
+            "voluntary_samples": usage_samples(samples, |usage| usage.voluntary),
             "involuntary": involuntary.map(summary_json),
+            "involuntary_samples": usage_samples(samples, |usage| usage.involuntary),
         },
     })
 }
@@ -198,6 +201,10 @@ fn summarize_usage(samples: &[Sample], field: impl Fn(Usage) -> Option<i64>) -> 
         .map(|sample| field(sample.usage).map(|value| value as f64))
         .collect::<Option<Vec<_>>>()?;
     Some(summarize(values))
+}
+
+fn usage_samples(samples: &[Sample], field: impl Fn(Usage) -> Option<i64>) -> Option<Vec<i64>> {
+    samples.iter().map(|sample| field(sample.usage)).collect()
 }
 
 fn summarize(mut values: Vec<f64>) -> Summary {
