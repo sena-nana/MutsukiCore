@@ -104,19 +104,16 @@ fn main() {
 
 fn requested_logical_cores() -> Option<usize> {
     let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        if arg == "--logical-cores" {
-            let value = args
-                .next()
-                .expect("--logical-cores requires a positive integer")
-                .parse::<usize>()
-                .expect("--logical-cores requires a positive integer");
-            assert!(value > 0, "--logical-cores requires a positive integer");
-            return Some(value);
-        }
-        panic!("unsupported argument {arg:?}");
-    }
-    None
+    let arg = args.next()?;
+    assert_eq!(arg, "--logical-cores", "unsupported argument {arg:?}");
+    let value = args
+        .next()
+        .expect("--logical-cores requires a positive integer")
+        .parse::<usize>()
+        .expect("--logical-cores requires a positive integer");
+    assert!(value > 0, "--logical-cores requires a positive integer");
+    assert!(args.next().is_none(), "unexpected extra benchmark argument");
+    Some(value)
 }
 
 fn interleaved_samples(
