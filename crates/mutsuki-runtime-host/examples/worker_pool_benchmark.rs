@@ -3,7 +3,7 @@ use std::sync::{Arc, Barrier, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::bounded;
+use crossbeam_channel::{TrySendError, bounded};
 use serde_json::{Value, json};
 
 const BLOCKING_THREADS: usize = 4;
@@ -294,7 +294,17 @@ fn run_bounded(threads: usize) -> Sample {
         })
         .collect::<Vec<_>>();
     for job in 0..JOBS {
-        sender.send(job).expect("bounded queue disconnected");
+        let mut pending = job;
+        loop {
+            match sender.try_send(pending) {
+                Ok(()) => break,
+                Err(TrySendError::Full(job)) => {
+                    pending = job;
+                    std::hint::spin_loop();
+                }
+                Err(TrySendError::Disconnected(_)) => panic!("bounded queue disconnected"),
+            }
+        }
     }
     drop(sender);
     finished.wait();
